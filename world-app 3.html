@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>World – Basureros</title>
+<link href="https://fonts.googleapis.com/css2?family=Special+Elite&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<style>
+  :root {
+    --bg: #f4efe6;
+    --ink: #1a1a1a;
+    --green: #27ae60;
+    --red: #e74c3c;
+    --orange: #f39c12;
+    --card: #fff;
+    --border: 2.5px solid #1a1a1a;
+    --radius: 6px;
+    --shadow: 3px 3px 0 #1a1a1a;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html,body { width:100%; height:100%; overflow:hidden; font-family:'Share Tech Mono',monospace; background:var(--bg); }
+
+  .app { width:100%; height:100dvh; display:flex; flex-direction:column; background:var(--card); }
+
+  /* HEADER */
+  .header {
+    display:flex; align-items:center; gap:10px;
+    padding:10px 14px 8px; border-bottom:var(--border);
+    background:var(--card); flex-shrink:0; z-index:1000;
+  }
+  .logo-circle { width:36px; height:36px; border:2.5px solid var(--ink); border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:1.1rem; flex-shrink:0; }
+  .logo-text { font-family:'Special Elite',cursive; font-size:1.55rem; letter-spacing:5px; color:var(--ink); flex:1; }
+  .legend-btn { background:none; border:var(--border); border-radius:var(--radius); padding:5px 9px; font-size:0.62rem; cursor:pointer; color:var(--ink); font-family:'Share Tech Mono',monospace; white-space:nowrap; }
+
+  /* MAP */
+  #map { flex:1; z-index:1; }
+
+  /* BOTTOM */
+  .bottom-panel { flex-shrink:0; background:var(--card); border-top:var(--border); padding:10px 12px 14px; z-index:1000; }
+  .location-bar { border:var(--border); border-radius:var(--radius); padding:10px 12px; margin-bottom:9px; display:flex; align-items:center; gap:8px; cursor:pointer; background:var(--card); box-shadow:var(--shadow); transition:background .15s; }
+  .location-bar:active { background:var(--bg); }
+  .location-bar span { font-size:0.75rem; color:#444; flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .btn-row { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+  .btn { border:var(--border); border-radius:var(--radius); padding:13px 8px; font-family:'Special Elite',cursive; font-size:0.88rem; cursor:pointer; background:var(--card); color:var(--ink); text-align:center; line-height:1.3; box-shadow:var(--shadow); transition:background .15s, transform .1s; }
+  .btn:active { transform:scale(.97); background:var(--bg); }
+  .btn.primary { background:var(--ink); color:#fff; }
+  .btn.primary:active { background:#333; }
+
+  /* POPUP */
+  .popup-overlay { position:fixed; inset:0; background:rgba(0,0,0,.38); z-index:2000; display:none; align-items:flex-end; justify-content:center; }
+  .popup-overlay.open { display:flex; animation:fadeIn .2s; }
+  @keyframes fadeIn { from{opacity:0}to{opacity:1} }
+  .popup-card { background:var(--card); border:var(--border); border-radius:var(--radius) var(--radius) 0 0; padding:18px 18px 30px; width:100%; max-width:480px; animation:slideUp .25s ease; }
+  @keyframes slideUp { from{transform:translateY(40px);opacity:0}to{transform:translateY(0);opacity:1} }
+  .popup-header { display:flex; align-items:flex-start; gap:10px; margin-bottom:10px; }
+  .popup-icon { font-size:1.9rem; }
+  .popup-title { font-family:'Special Elite',cursive; font-size:1.05rem; }
+  .popup-sub { font-size:0.7rem; color:#666; margin-top:2px; }
+  .popup-close { margin-left:auto; background:none; border:var(--border); border-radius:50%; width:28px; height:28px; font-size:0.85rem; cursor:pointer; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+  .popup-body { font-size:0.78rem; color:#444; line-height:1.9; }
+  .capacity-bar { background:#eee; border-radius:4px; height:8px; margin:6px 0 4px; overflow:hidden; }
+  .capacity-fill { height:100%; border-radius:4px; }
+  .popup-tag { display:inline-block; color:white; border-radius:3px; padding:2px 8px; font-size:0.65rem; margin-top:8px; margin-right:4px; }
+  .route-btn { display:block; width:100%; margin-top:14px; padding:12px; background:var(--ink); color:white; border:none; border-radius:var(--radius); font-family:'Special Elite',cursive; font-size:0.95rem; cursor:pointer; letter-spacing:1px; }
+
+  /* LEGEND */
+  .legend-panel { position:fixed; top:68px; right:10px; background:var(--card); border:var(--border); border-radius:var(--radius); padding:10px 13px; z-index:1500; box-shadow:var(--shadow); display:none; min-width:165px; }
+  .legend-panel.open { display:block; }
+  .legend-row { display:flex; align-items:center; gap:8px; padding:4px 0; font-size:0.72rem; }
+  .dot { width:13px; height:13px; border-radius:50%; flex-shrink:0; }
+
+  /* TOAST */
+  .toast { position:fixed; top:72px; left:50%; transform:translateX(-50%); background:var(--ink); color:white; padding:7px 16px; border-radius:20px; font-size:0.73rem; z-index:3000; opacity:0; transition:opacity .3s; white-space:nowrap; pointer-events:none; }
+  .toast.show { opacity:1; }
+
+  /* Loading overlay */
+  .loading { position:fixed; inset:0; background:var(--card); display:flex; flex-direction:column; align-items:center; justify-content:center; z-index:5000; transition:opacity .5s; }
+  .loading.hidden { opacity:0; pointer-events:none; }
+  .loading-circle { width:60px; height:60px; border:3px solid var(--ink); border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:1.8rem; animation:spin 2s linear infinite; }
+  @keyframes spin { from{transform:rotate(0deg)}to{transform:rotate(360deg)} }
+  .loading-text { font-family:'Special Elite',cursive; font-size:1.4rem; letter-spacing:4px; margin-top:14px; }
+  .loading-sub { font-size:0.7rem; color:#666; margin-top:6px; }
+
+  /* Custom trash icon for Leaflet */
+  .trash-icon { font-size:18px; line-height:1; text-align:center; }
+  .trash-available { filter: drop-shadow(0 0 4px #27ae60); }
+  .trash-medium { filter: drop-shadow(0 0 4px #f39c12); }
+  .trash-full { filter: drop-shadow(0 0 6px #e74c3c); animation: trashPulse 1.2s ease-in-out infinite; }
+  @keyframes trashPulse { 0%,100%{transform:scale(1)}50%{transform:scale(1.2)} }
+
+  /* Leaflet popup override */
+  .leaflet-popup-content-wrapper { border:var(--border) !important; border-radius:var(--radius) !important; box-shadow:var(--shadow) !important; font-family:'Share Tech Mono',monospace !important; }
+  .leaflet-popup-tip-container { display:none; }
+  .bin-popup { padding:4px 2px; min-width:180px; }
+  .bin-popup h3 { font-family:'Special Elite',cursive; font-size:0.9rem; margin-bottom:4px; }
+  .bin-popup p { font-size:0.7rem; color:#555; line-height:1.6; }
+  .bin-popup .open-btn { display:block; width:100%; margin-top:8px; padding:7px; background:var(--ink); color:white; border:none; border-radius:4px; font-size:0.75rem; cursor:pointer; font-family:'Special Elite',cursive; letter-spacing:0.5px; }
+</style>
+</head>
+<body>
+
+<!-- LOADING -->
+<div class="loading" id="loading">
+  <div class="loading-circle">🌍</div>
+  <div class="loading-text">World</div>
+  <div class="loading-sub">Obteniendo tu ubicación...</div>
+</div>
+
+<div class="app">
+  <!-- HEADER -->
+  <div class="header">
+    <div class="logo-circle">🌍</div>
+    <div class="logo-text">World</div>
+    <button class="legend-btn" onclick="toggleLegend()">🗺 Leyenda</button>
+  </div>
+
+  <!-- MAP -->
+  <div id="map"></div>
+
+  <!-- BOTTOM -->
+  <div class="bottom-panel">
+    <div class="location-bar" onclick="centerOnUser()">
+      <span>📍</span>
+      <span id="locText">Obteniendo ubicación...</span>
+    </div>
+    <div class="btn-row">
+      <button class="btn" onclick="findNearest()">Buscar<br>automático</button>
+      <button class="btn primary" onclick="sendMessage()">Mensaje</button>
+    </div>
+  </div>
+</div>
+
+<!-- POPUP DETALLE -->
+<div class="popup-overlay" id="popup" onclick="closePopup(event)">
+  <div class="popup-card" onclick="event.stopPropagation()">
+    <div class="popup-header">
+      <div class="popup-icon" id="pIcon">🗑</div>
+      <div style="flex:1">
+        <div class="popup-title" id="pTitle"></div>
+        <div class="popup-sub" id="pSub"></div>
+      </div>
+      <button class="popup-close" onclick="closePopup()">✕</button>
+    </div>
+    <div class="popup-body" id="pBody"></div>
+    <button class="route-btn" id="pRoute">🗺 Ver ruta hacia aquí</button>
+  </div>
+</div>
+
+<!-- LEGEND -->
+<div class="legend-panel" id="legendPanel">
+  <div style="font-family:'Special Elite',cursive;font-size:0.82rem;margin-bottom:6px;border-bottom:1.5px solid #eee;padding-bottom:5px">Basureros</div>
+  <div class="legend-row"><div class="dot" style="background:#27ae60"></div> Disponible</div>
+  <div class="legend-row"><div class="dot" style="background:#f39c12"></div> Media capacidad</div>
+  <div class="legend-row"><div class="dot" style="background:#e74c3c"></div> Lleno — urgente</div>
+  <div class="legend-row" style="margin-top:6px;border-top:1.5px solid #eee;padding-top:5px"><div class="dot" style="background:#3498db"></div> Mi ubicación</div>
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
+
+<script>
+// ─── MAP INIT ─────────────────────────────────────────────
+const map = L.map('map', {
+  zoomControl: true,
+  attributionControl: true,
+  minZoom: 2,
+  maxZoom: 19,
+}).setView([4.711, -74.072], 13); // Bogotá por defecto
+
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+  maxZoom: 19,
+}).addTo(map);
+
+// ─── DATOS DE BASUREROS (simulados cerca de la ubicación del usuario) ─────────
+// Se generarán dinámicamente alrededor de la ubicación real
+let bins = [];
+let userMarker = null;
+let userLat = null, userLng = null;
+let binMarkers = [];
+
+function generateBins(lat, lng) {
+  // Genera 9 basureros simulados cerca del usuario
+  const offsets = [
+    { dlat:0.003,  dlng:0.005,  name:'Basurero Calle Principal',   addr:'Calle 1, cerca de ti',          pct:35,  type:'Residencial', freq:'Lun · Mié · Vie' },
+    { dlat:-0.004, dlng:0.002,  name:'Basurero Centro',            addr:'Centro Comercial cercano',       pct:60,  type:'Mixto',       freq:'Mar · Jue · Sáb' },
+    { dlat:0.006,  dlng:-0.003, name:'Punto Ecológico Norte',      addr:'Parque Norte, frente al lago',   pct:20,  type:'Ecológico',   freq:'Lun a Sáb' },
+    { dlat:-0.002, dlng:-0.006, name:'Contenedor Parque',          addr:'Parque Municipal sector oeste',  pct:72,  type:'Parque',      freq:'Diario' },
+    { dlat:0.007,  dlng:0.007,  name:'Basurero Avenida Principal', addr:'Av. Principal esquina',         pct:45,  type:'Vial',        freq:'Lun a Sáb' },
+    { dlat:-0.008, dlng:0.004,  name:'Basurero Sector Sur',        addr:'Cl 15 #10-20, Sur',             pct:30,  type:'Residencial', freq:'Mar · Jue · Sáb' },
+    { dlat:0.001,  dlng:-0.008, name:'Basurero Zona Residencial',  addr:'Cra 8 #22-14, Residencial',     pct:100, type:'Residencial', freq:'Próx. recolección: mañana 6am' },
+    { dlat:-0.005, dlng:-0.004, name:'Punto Limpio Este',          addr:'Cra 13 #5-05, Sector Este',     pct:50,  type:'Punto Limpio',freq:'Diario 6am–8pm' },
+    { dlat:0.009,  dlng:-0.001, name:'Basurero Nuevo',             addr:'Cl 44 #18-30, Zona Nueva',      pct:15,  type:'Residencial', freq:'Lun · Mié · Vie' },
+  ];
+
+  return offsets.map((o, i) => ({
+    id: i+1,
+    lat: lat + o.dlat,
+    lng: lng + o.dlng,
+    name: o.name,
+    addr: o.addr,
+    pct: o.pct,
+    type: o.type,
+    freq: o.freq,
+    status: o.pct === 100 ? 'LLENO ⚠️' : o.pct >= 70 ? 'Media capacidad' : 'Disponible',
+    col: o.pct === 100 ? '#e74c3c' : o.pct >= 70 ? '#f39c12' : '#27ae60',
+  }));
+}
+
+// ─── CUSTOM ICON ──────────────────────────────────────────
+function trashIcon(bin) {
+  const cls = bin.pct === 100 ? 'trash-full' : bin.pct >= 70 ? 'trash-medium' : 'trash-available';
+  return L.divIcon({
+    className: '',
+    html: `<div class="trash-icon ${cls}" style="font-size:22px;filter:drop-shadow(1px 2px 3px rgba(0,0,0,.4))">🗑</div>`,
+    iconSize: [28, 28],
+    iconAnchor: [14, 14],
+    popupAnchor: [0, -14],
+  });
+}
+
+function userIcon() {
+  return L.divIcon({
+    className: '',
+    html: `<div style="width:20px;height:20px;background:#3498db;border:3px solid white;border-radius:50%;box-shadow:0 0 0 4px rgba(52,152,219,.3)"></div>`,
+    iconSize: [20, 20],
+    iconAnchor: [10, 10],
+  });
+}
+
+// ─── PLACE BINS ON MAP ────────────────────────────────────
+function placeBins() {
+  binMarkers.forEach(m => map.removeLayer(m));
+  binMarkers = [];
+  bins.forEach(bin => {
+    const marker = L.marker([bin.lat, bin.lng], { icon: trashIcon(bin) }).addTo(map);
+    marker.bindPopup(`
+      <div class="bin-popup">
+        <h3>${bin.pct===100?'🚫':'🗑'} ${bin.name}</h3>
+        <p>📍 ${bin.addr}</p>
+        <p>Estado: <b style="color:${bin.col}">${bin.status}</b></p>
+        <p>Capacidad: ${bin.pct}%</p>
+        <button class="open-btn" onclick="showBin(${bin.id})">Ver detalles</button>
+      </div>
+    `, { maxWidth: 220 });
+    binMarkers.push(marker);
+  });
+}
+
+// ─── SHOW BIN DETAIL ──────────────────────────────────────
+function showBin(id) {
+  map.closePopup();
+  const b = bins.find(x => x.id === id);
+  if (!b) return;
+  document.getElementById('pIcon').textContent = b.pct===100 ? '🚫' : '🗑';
+  document.getElementById('pTitle').textContent = b.name;
+  document.getElementById('pSub').textContent = b.addr;
+  document.getElementById('pBody').innerHTML = `
+    <b>Estado:</b> <span style="color:${b.col};font-weight:bold">${b.status}</span><br>
+    <b>Tipo:</b> ${b.type}<br>
+    <b>Capacidad actual:</b> ${b.pct}%
+    <div class="capacity-bar"><div class="capacity-fill" style="width:${b.pct}%;background:${b.col}"></div></div>
+    <b>Recolección:</b> ${b.freq}
+    <div>
+      <span class="popup-tag" style="background:${b.col}">${b.status}</span>
+      <span class="popup-tag" style="background:#555">${b.type}</span>
+    </div>`;
+  document.getElementById('pRoute').onclick = () => {
+    closePopup();
+    window.open(`https://www.google.com/maps/dir/?api=1&destination=${b.lat},${b.lng}`, '_blank');
+  };
+  document.getElementById('popup').classList.add('open');
+}
+
+// ─── GPS LOCATION ─────────────────────────────────────────
+function initLocation() {
+  if (!navigator.geolocation) {
+    fallbackLocation();
+    return;
+  }
+  navigator.geolocation.getCurrentPosition(
+    pos => {
+      userLat = pos.coords.latitude;
+      userLng = pos.coords.longitude;
+      onLocationFound(userLat, userLng);
+    },
+    err => {
+      console.warn('GPS error:', err.message);
+      fallbackLocation();
+    },
+    { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+  );
+}
+
+function fallbackLocation() {
+  // Temixco, Morelos MX (known user location)
+  userLat = 18.8497;
+  userLng = -99.2264;
+  showToast('📡 Usando ubicación aproximada');
+  onLocationFound(userLat, userLng);
+}
+
+function onLocationFound(lat, lng) {
+  // Place user marker
+  if (userMarker) map.removeLayer(userMarker);
+  userMarker = L.marker([lat, lng], { icon: userIcon(), zIndexOffset: 1000 })
+    .addTo(map)
+    .bindTooltip('📍 Mi ubicación', { permanent: false, direction: 'top' });
+
+  // Center map
+  map.setView([lat, lng], 15);
+
+  // Reverse geocode using Nominatim
+  fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`)
+    .then(r => r.json())
+    .then(data => {
+      const place = data.display_name ? data.display_name.split(',').slice(0,3).join(', ') : `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+      document.getElementById('locText').textContent = '📍 ' + place;
+    })
+    .catch(() => {
+      document.getElementById('locText').textContent = `📍 ${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+    });
+
+  // Generate and place bins
+  bins = generateBins(lat, lng);
+  placeBins();
+
+  // Hide loading
+  setTimeout(() => {
+    document.getElementById('loading').classList.add('hidden');
+  }, 600);
+}
+
+// ─── CENTER ON USER ────────────────────────────────────────
+function centerOnUser() {
+  if (userLat !== null) {
+    map.flyTo([userLat, userLng], 16, { duration: 1.2 });
+    showToast('📍 Centrando en tu ubicación');
+  } else {
+    showToast('⏳ Obteniendo ubicación...');
+    initLocation();
+  }
+}
+
+// ─── FIND NEAREST ──────────────────────────────────────────
+function findNearest() {
+  if (!userLat) { showToast('⏳ Aún obteniendo ubicación...'); return; }
+  // Sort by distance
+  const sorted = [...bins].sort((a, b) => {
+    const da = Math.hypot(a.lat-userLat, a.lng-userLng);
+    const db = Math.hypot(b.lat-userLat, b.lng-userLng);
+    return da - db;
+  });
+  const nearest = sorted.find(b => b.pct < 100) || sorted[0];
+  map.flyTo([nearest.lat, nearest.lng], 17, { duration: 1.4 });
+  setTimeout(() => {
+    binMarkers[nearest.id-1].openPopup();
+    showToast(`🗑 Más cercano: ${nearest.name}`);
+  }, 1500);
+}
+
+// ─── SEND MESSAGE ─────────────────────────────────────────
+function sendMessage() {
+  showToast('📨 Función de mensajes próximamente');
+}
+
+// ─── UI HELPERS ───────────────────────────────────────────
+function toggleLegend() {
+  document.getElementById('legendPanel').classList.toggle('open');
+}
+function closePopup(e) {
+  if (!e || e.target === document.getElementById('popup'))
+    document.getElementById('popup').classList.remove('open');
+}
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2800);
+}
+
+// ─── START ────────────────────────────────────────────────
+window.addEventListener('load', initLocation);
+</script>
+</body>
+</html>
